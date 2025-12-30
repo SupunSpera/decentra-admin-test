@@ -2,42 +2,42 @@
 
 /**
  * TestingController
- * 
+ *
  * This controller provides comprehensive testing endpoints for the binary tree referral system.
- * 
+ *
  * ENDPOINTS:
- * 
+ *
  * 1. POST /testing/customers/add-to-tree
  *    - Create multiple customers in a balanced binary tree
  *    - Parameters: count (default: 1000), start_index (default: 1)
- * 
+ *
  * 2. POST /testing/points/add-to-user
  *    - Add points to a single customer with tree propagation
  *    - Parameters: customer_id, points, side (left/right)
- * 
+ *
  * 3. POST /testing/points/add-to-multiple-users
  *    - Add points to multiple customers in bulk
  *    - Parameters: users[] (customer_id, points, side)
- * 
+ *
  * 4. POST /testing/bonuses/generate
  *    - Generate supporting bonuses for customers
  *    - Parameters: amount (optional), customer_ids[] (optional)
- * 
+ *
  * 5. GET /testing/bonuses/check?customer_id=X
  *    - Check supporting bonuses for a specific customer
  *    - Parameters: customer_id
- * 
+ *
  * 6. GET /testing/tree/stats
  *    - Get comprehensive tree statistics
- * 
+ *
  * 7. GET /testing/customer/details?customer_id=X
  *    - Get detailed customer information with tree relationships
  *    - Parameters: customer_id
- * 
+ *
  * 8. POST /testing/clear-test-data
  *    - ⚠️ DANGEROUS: Clear all test data
  *    - Parameters: confirm (must be "YES_DELETE_ALL")
- * 
+ *
  * See TESTING_API_DOCUMENTATION.md for detailed usage examples.
  */
 
@@ -47,18 +47,23 @@ use App\Models\Customer;
 use App\Models\CustomerSupportingBonus;
 use App\Models\Referral;
 use App\Models\Wallet;
+use App\Models\InstituteMember;
 use Carbon\Carbon;
 use domain\Facades\CustomerFacade;
 use domain\Facades\CustomerSupportingBonusFacade;
 use domain\Facades\ReferralFacade;
 use domain\Facades\WalletFacade;
+use domain\Facades\InstituteMemberFacade;
+use domain\Facades\ProductPurchaseFacade;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use App\Traits\Referral\ReferralHelper;
 
 class TestingController extends Controller
 {
+    use ReferralHelper;
     /**
      * Generate a fake ETH wallet address
      *
@@ -926,7 +931,8 @@ class TestingController extends Controller
     }
 
     /**
-     * Create a single customer and automatically add to tree
+     * Create a single customer with manual or automatic tree placement
+     * Matches functionality from CustomerCreateForm.php
      *
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
@@ -937,6 +943,9 @@ class TestingController extends Controller
             'first_name' => 'required|string|max:50',
             'last_name' => 'required|string|max:50',
             'email' => 'required|email|unique:customers,email',
+            'referral_id' => 'required|integer|exists:referrals,id',
+            'parent_referral_id' => 'nullable|integer|exists:referrals,id',
+            'placement' => 'nullable|in:L,R,left,right',
             'telephone' => 'nullable|string|max:20',
             'mobile' => 'nullable|string|max:20',
             'password' => 'nullable|string|min:8',
@@ -945,7 +954,7 @@ class TestingController extends Controller
         DB::beginTransaction();
 
         try {
-            $password = $request->input('password', 'password123');
+            $password = $request->input('password', Str::random(8));
 
             // Create customer
             $customer = Customer::create([
@@ -980,99 +989,49 @@ class TestingController extends Controller
                 'used_income_quota' => 0,
             ]);
 
-            // Find available parent in tree
-            $parentReferral = $this->findAvailableParent();
+            // Check if customer exists in institute members table
+            $member = InstituteMember::where('email', $customer->email)
+                ->where('status', InstituteMember::STATUS['PENDING'])
+                ->first();
 
-            if (!$parentReferral) {
-                // No tree exists, create as root
-                $referral = Referral::create([
+            if ($member) {
+                $member->update([
                     'customer_id' => $customer->id,
-                    'parent_referral_id' => null,
-                    'direct_referral_id' => null,
-                    'left_child_id' => null,
-                    'right_child_id' => null,
-                    'level' => 1,
-                    'level_index' => 1,
-                    'left_points' => 0,
-                    'right_points' => 0,
-                    'status' => 1,
-                ]);
-
-                DB::commit();
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Customer created successfully as root of tree',
-                    'customer' => [
-                        'id' => $customer->id,
-                        'first_name' => $customer->first_name,
-                        'last_name' => $customer->last_name,
-                        'email' => $customer->email,
-                        'referral_code' => $customer->referral_code,
-                        'wallet_address' => $walletAddress,
-                    ],
-                    'referral' => [
-                        'id' => $referral->id,
-                        'level' => $referral->level,
-                        'level_index' => $referral->level_index,
-                        'parent_referral_id' => null,
-                    ],
+                    'status' => InstituteMember::STATUS['ACTIVE'],
                 ]);
             }
 
-            // Add customer to tree
-            $level = $parentReferral->level + 1;
+            $directReferralId = $request->input('referral_id');
+            $parentReferralId = $request->input('parent_referral_id');
+            $placement = $request->input('placement');
 
-            // Determine if this will be left or right child
-            if (!$parentReferral->left_child_id) {
-                $levelIndex = $this->calculateLevelIndex($parentReferral->level_index, 1);
-                $position = 'left';
+            // Normalize placement to uppercase
+            if ($placement) {
+                $placement = strtoupper(substr($placement, 0, 1)); // L or R
+            }
 
-                // Create referral as left child
-                $referral = Referral::create([
-                    'customer_id' => $customer->id,
-                    'parent_referral_id' => $parentReferral->id,
-                    'direct_referral_id' => $parentReferral->id,
-                    'left_child_id' => null,
-                    'right_child_id' => null,
-                    'level' => $level,
-                    'level_index' => $levelIndex,
-                    'left_points' => 0,
-                    'right_points' => 0,
-                    'status' => 1,
-                ]);
-
-                // Update parent's left child
-                $parentReferral->update(['left_child_id' => $referral->id]);
+            // Decide between manual and auto placement
+            if ($parentReferralId && $placement) {
+                // MANUAL PLACEMENT
+                $result = $this->manualPlacement($customer, $directReferralId, $parentReferralId, $placement);
             } else {
-                $levelIndex = $this->calculateLevelIndex($parentReferral->level_index, 2);
-                $position = 'right';
+                // AUTO PLACEMENT
+                $result = $this->autoPlacement($customer, $directReferralId);
+            }
 
-                // Create referral as right child
-                $referral = Referral::create([
-                    'customer_id' => $customer->id,
-                    'parent_referral_id' => $parentReferral->id,
-                    'direct_referral_id' => $parentReferral->id,
-                    'left_child_id' => null,
-                    'right_child_id' => null,
-                    'level' => $level,
-                    'level_index' => $levelIndex,
-                    'left_points' => 0,
-                    'right_points' => 0,
-                    'status' => 1,
+            // Update direct referral's active status
+            $directReferralCustomer = Referral::find($directReferralId);
+            if ($directReferralCustomer) {
+                Customer::find($directReferralCustomer->customer_id)->update([
+                    'active_status' => Customer::ACTIVE_STATUS['ACTIVE']
                 ]);
-
-                // Update parent's right child
-                $parentReferral->update(['right_child_id' => $referral->id]);
             }
 
             DB::commit();
 
-            $parentCustomer = Customer::find($parentReferral->customer_id);
-
             return response()->json([
                 'success' => true,
-                'message' => 'Customer created and added to tree successfully',
+                'message' => 'Customer created successfully',
                 'customer' => [
                     'id' => $customer->id,
                     'first_name' => $customer->first_name,
@@ -1080,19 +1039,9 @@ class TestingController extends Controller
                     'email' => $customer->email,
                     'referral_code' => $customer->referral_code,
                     'wallet_address' => $walletAddress,
+                    'password' => $password,
                 ],
-                'referral' => [
-                    'id' => $referral->id,
-                    'level' => $level,
-                    'level_index' => $levelIndex,
-                    'parent_referral_id' => $parentReferral->id,
-                    'position' => $position,
-                ],
-                'parent' => [
-                    'customer_id' => $parentCustomer->id,
-                    'email' => $parentCustomer->email,
-                    'referral_code' => $parentCustomer->referral_code,
-                ],
+                'referral' => $result,
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -1102,6 +1051,321 @@ class TestingController extends Controller
                 'message' => 'Failed to create customer: ' . $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ], 500);
+        }
+    }
+
+    /**
+     * Manual placement logic
+     *
+     * @param Customer $customer
+     * @param int $directReferralId
+     * @param int $parentReferralId
+     * @param string $placement (L or R)
+     * @return array
+     */
+    private function manualPlacement($customer, $directReferralId, $parentReferralId, $placement)
+    {
+        $parent = Referral::find($parentReferralId);
+
+        if (!$parent) {
+            throw new \Exception('Parent referral not found');
+        }
+
+        if ($placement == 'L') {
+            if ($parent->left_child_id) {
+                throw new \Exception('Left position already occupied');
+            }
+
+            $levelIndex = $this->calculateLevelIndex($parent->level_index, 1);
+
+            $referral = Referral::create([
+                'customer_id' => $customer->id,
+                'parent_referral_id' => $parentReferralId,
+                'direct_referral_id' => $directReferralId,
+                'level' => ($parent->level + 1),
+                'level_index' => $levelIndex,
+                'left_child_id' => null,
+                'right_child_id' => null,
+                'left_points' => 0,
+                'right_points' => 0,
+                'status' => 1,
+            ]);
+
+            $parent->update(['left_child_id' => $referral->id]);
+
+            return [
+                'id' => $referral->id,
+                'level' => $referral->level,
+                'level_index' => $referral->level_index,
+                'position' => 'left',
+                'placement_type' => 'manual',
+                'parent_referral_id' => $parentReferralId,
+                'direct_referral_id' => $directReferralId,
+            ];
+        } else if ($placement == 'R') {
+            if ($parent->right_child_id) {
+                throw new \Exception('Right position already occupied');
+            }
+
+            $levelIndex = $this->calculateLevelIndex($parent->level_index, 2);
+
+            $referral = Referral::create([
+                'customer_id' => $customer->id,
+                'parent_referral_id' => $parentReferralId,
+                'direct_referral_id' => $directReferralId,
+                'level' => ($parent->level + 1),
+                'level_index' => $levelIndex,
+                'left_child_id' => null,
+                'right_child_id' => null,
+                'left_points' => 0,
+                'right_points' => 0,
+                'status' => 1,
+            ]);
+
+            $parent->update(['right_child_id' => $referral->id]);
+
+            return [
+                'id' => $referral->id,
+                'level' => $referral->level,
+                'level_index' => $referral->level_index,
+                'position' => 'right',
+                'placement_type' => 'manual',
+                'parent_referral_id' => $parentReferralId,
+                'direct_referral_id' => $directReferralId,
+            ];
+        } else {
+            throw new \Exception('Invalid placement. Must be L or R');
+        }
+    }
+
+    /**
+     * Auto placement logic (matches CustomerCreateForm logic)
+     *
+     * @param Customer $customer
+     * @param int $directReferralId
+     * @return array
+     */
+    private function autoPlacement($customer, $directReferralId)
+    {
+        $parent = Referral::find($directReferralId);
+
+        if (!$parent) {
+            throw new \Exception('Direct referral not found');
+        }
+
+        // Check if left child is empty
+        if (!$parent->left_child_id) {
+            $levelIndex = $this->calculateLevelIndex($parent->level_index, 1);
+
+            $referral = Referral::create([
+                'customer_id' => $customer->id,
+                'parent_referral_id' => $parent->id,
+                'direct_referral_id' => $parent->id,
+                'level' => ($parent->level + 1),
+                'level_index' => $levelIndex,
+                'left_child_id' => null,
+                'right_child_id' => null,
+                'left_points' => 0,
+                'right_points' => 0,
+                'status' => 1,
+            ]);
+
+            $parent->update(['left_child_id' => $referral->id]);
+
+            return [
+                'id' => $referral->id,
+                'level' => $referral->level,
+                'level_index' => $referral->level_index,
+                'position' => 'left',
+                'placement_type' => 'auto',
+                'parent_referral_id' => $parent->id,
+                'direct_referral_id' => $parent->id,
+            ];
+        }
+        // Check if right child is empty
+        else if (!$parent->right_child_id) {
+            $levelIndex = $this->calculateLevelIndex($parent->level_index, 2);
+
+            $referral = Referral::create([
+                'customer_id' => $customer->id,
+                'parent_referral_id' => $parent->id,
+                'direct_referral_id' => $parent->id,
+                'level' => ($parent->level + 1),
+                'level_index' => $levelIndex,
+                'left_child_id' => null,
+                'right_child_id' => null,
+                'left_points' => 0,
+                'right_points' => 0,
+                'status' => 1,
+            ]);
+
+            $parent->update(['right_child_id' => $referral->id]);
+
+            return [
+                'id' => $referral->id,
+                'level' => $referral->level,
+                'level_index' => $referral->level_index,
+                'position' => 'right',
+                'placement_type' => 'auto',
+                'parent_referral_id' => $parent->id,
+                'direct_referral_id' => $parent->id,
+            ];
+        }
+        // Both children occupied - find optimal placement
+        else {
+            $directReferrals = Referral::where('direct_referral_id', $directReferralId)->get()->toArray();
+
+            if (count($directReferrals) == 1) {
+                // Only one direct child available under this parent
+                $directReferral = intval($directReferrals[0]['id']);
+                $filledReferral = ($directReferral == intval($parent->left_child_id)) ? 'RIGHT' : 'LEFT';
+
+                $outerChildren = $this->getOuterChildWithSide($directReferralId, $filledReferral);
+            } else {
+                // Multiple direct referrals - use complex balancing logic
+                $leftSidePoints = floatval($parent->left_points);
+                $rightSidePoints = floatval($parent->right_points);
+
+                // Get child referral count of both sides
+                $leftReferral = $this->getChildReferrals($parent->id, 'left');
+                $leftReferralCount = count($leftReferral);
+
+                $rightReferral = $this->getChildReferrals($parent->id, 'right');
+                $rightReferralCount = count($rightReferral);
+
+                if (($leftSidePoints == 0 && $rightSidePoints == 0) || ($leftReferralCount == 0 && $rightReferralCount == 0)) {
+                    $outerChildren = $this->getOuterChildren($parent->id);
+                } else if ($leftSidePoints === $rightSidePoints) {
+                    $outerChildren = $this->getOuterChildren($parent->id);
+                } else {
+                    // Complex balancing based on points and active customers
+                    $pointsArray = [
+                        'leftSide' => floatval($leftSidePoints),
+                        'rightSide' => floatval($rightSidePoints),
+                    ];
+
+                    $minimumPointsSide = array_search(min($pointsArray), $pointsArray);
+
+                    // Get date before two months
+                    $dateBeforeTwoMonths = Carbon::now()->subMonths(2)->format('Y-n-j');
+
+                    // Get left side active customers
+                    $leftCustomers = array_column($leftReferral, 'customer_id');
+                    $leftProductPurchasedCustomers = [];
+                    if (count($leftCustomers) > 0) {
+                        $leftProductPurchasedCustomers = \App\Models\ProductPurchase::whereIn('customer_id', $leftCustomers)
+                            ->where('created_at', '>=', $dateBeforeTwoMonths)
+                            ->pluck('customer_id')
+                            ->toArray();
+                    }
+
+                    $leftProductPurchasedReferrals = Referral::whereIn('direct_referral_id', array_column($leftReferral, 'id'))
+                        ->whereHas('customer.productPurchases', function ($query) use ($dateBeforeTwoMonths) {
+                            $query->where('created_at', '>=', $dateBeforeTwoMonths);
+                        })
+                        ->get();
+
+                    $leftProductPurchasedParents = array_column($leftProductPurchasedReferrals->toArray(), 'customer_id');
+                    $leftActiveCustomers = array_unique(array_merge($leftProductPurchasedCustomers, $leftProductPurchasedParents));
+
+                    // Get right side active customers
+                    $rightCustomers = array_column($rightReferral, 'customer_id');
+                    $rightProductPurchasedCustomers = [];
+                    if (count($rightCustomers) > 0) {
+                        $rightProductPurchasedCustomers = \App\Models\ProductPurchase::whereIn('customer_id', $rightCustomers)
+                            ->where('created_at', '>=', $dateBeforeTwoMonths)
+                            ->pluck('customer_id')
+                            ->toArray();
+                    }
+
+                    $rightProductPurchasedReferrals = Referral::whereIn('direct_referral_id', array_column($rightReferral, 'id'))
+                        ->whereHas('customer.productPurchases', function ($query) use ($dateBeforeTwoMonths) {
+                            $query->where('created_at', '>=', $dateBeforeTwoMonths);
+                        })
+                        ->get();
+
+                    $rightProductPurchasedParents = array_column($rightProductPurchasedReferrals->toArray(), 'customer_id');
+                    $rightActiveCustomers = array_unique(array_merge($rightProductPurchasedCustomers, $rightProductPurchasedParents));
+
+                    $activeCustomersArray = [
+                        'leftSide' => count($leftActiveCustomers),
+                        'rightSide' => count($rightActiveCustomers),
+                    ];
+
+                    $minimumCustomersSide = array_search(min($activeCustomersArray), $activeCustomersArray);
+
+                    if ($leftActiveCustomers === $rightActiveCustomers) {
+                        $outerChildren = $this->getOuterChildren($parent->id);
+                    } else if ($minimumPointsSide === $minimumCustomersSide) {
+                        $side = ($minimumPointsSide === 'leftSide') ? 'LEFT' : 'RIGHT';
+                        $outerChildren = $this->getOuterChildWithSide($directReferralId, $side);
+                    } else {
+                        // If less points has side which has more customers
+                        $maximumCustomerSide = array_search(max($activeCustomersArray), $activeCustomersArray);
+                        $maximumSide = ($maximumCustomerSide === "leftSide") ? 'LEFT' : 'RIGHT';
+
+                        $leftCustomersCount = $activeCustomersArray['leftSide'];
+                        $rightCustomersCount = $activeCustomersArray['rightSide'];
+
+                        // Get percentage of difference of each side totals
+                        if ($maximumSide === 'RIGHT') {
+                            $percentage = ($rightCustomersCount) / 4;
+
+                            if ($percentage >= $leftCustomersCount) {
+                                $side = ($minimumPointsSide === 'rightSide') ? 'LEFT' : 'RIGHT';
+                                $outerChildren = $this->getOuterChildWithSide($parent->id, $side);
+                            } else {
+                                $side = ($minimumPointsSide === 'rightSide') ? 'RIGHT' : 'LEFT';
+                                $outerChildren = $this->getOuterChildWithSide($parent->id, $side);
+                            }
+                        } else {
+                            $percentage = ($leftCustomersCount) / 4;
+
+                            if ($percentage >= $rightCustomersCount) {
+                                $side = ($minimumPointsSide === 'rightSide') ? 'LEFT' : 'RIGHT';
+                                $outerChildren = $this->getOuterChildWithSide($parent->id, $side);
+                            } else {
+                                $side = ($minimumPointsSide === 'rightSide') ? 'RIGHT' : 'LEFT';
+                                $outerChildren = $this->getOuterChildWithSide($parent->id, $side);
+                            }
+                        }
+                    }
+                }
+            }
+
+            $newParent = Referral::find($outerChildren['child']);
+
+            $referral = Referral::create([
+                'customer_id' => $customer->id,
+                'parent_referral_id' => $newParent->id,
+                'direct_referral_id' => $parent->id,
+                'level' => ($newParent->level + 1),
+                'left_child_id' => null,
+                'right_child_id' => null,
+                'left_points' => 0,
+                'right_points' => 0,
+                'status' => 1,
+            ]);
+
+            if ($outerChildren['side'] == 'left') {
+                $newParent->update(['left_child_id' => $referral->id]);
+                $levelIndex = $this->calculateLevelIndex($newParent->level_index, 1);
+                $referral->update(['level_index' => $levelIndex]);
+            } else {
+                $newParent->update(['right_child_id' => $referral->id]);
+                $levelIndex = $this->calculateLevelIndex($newParent->level_index, 2);
+                $referral->update(['level_index' => $levelIndex]);
+            }
+
+            return [
+                'id' => $referral->id,
+                'level' => $referral->level,
+                'level_index' => $referral->level_index,
+                'position' => $outerChildren['side'],
+                'placement_type' => 'auto_complex',
+                'parent_referral_id' => $newParent->id,
+                'direct_referral_id' => $parent->id,
+            ];
         }
     }
 
