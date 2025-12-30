@@ -924,5 +924,354 @@ class TestingController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Create a single customer and automatically add to tree
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function createCustomer(Request $request)
+    {
+        $request->validate([
+            'first_name' => 'required|string|max:50',
+            'last_name' => 'required|string|max:50',
+            'email' => 'required|email|unique:customers,email',
+            'telephone' => 'nullable|string|max:20',
+            'mobile' => 'nullable|string|max:20',
+            'password' => 'nullable|string|min:8',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            $password = $request->input('password', 'password123');
+
+            // Create customer
+            $customer = Customer::create([
+                'first_name' => $request->input('first_name'),
+                'last_name' => $request->input('last_name'),
+                'email' => $request->input('email'),
+                'telephone' => $request->input('telephone', '0000000000'),
+                'mobile' => $request->input('mobile', '0000000000'),
+                'password' => Hash::make($password),
+                'type' => Customer::TYPE['INDIVIDUAL'],
+                'status' => Customer::STATUS['ACTIVE'],
+                'active_status' => Customer::ACTIVE_STATUS['ACTIVE'],
+                'purchased_status' => Customer::PURCHASED_STATUS['INACTIVE'],
+            ]);
+
+            // Generate fake wallet address for testing
+            $walletAddress = $this->generateFakeWalletAddress($customer->id);
+            $privateKey = $this->generateFakePrivateKey($customer->id);
+
+            // Create wallet
+            Wallet::create([
+                'customer_id' => $customer->id,
+                'token_amount' => 0,
+                'usdt_amount' => 0,
+                'holding_tokens' => 0,
+                'holding_usdt' => 0,
+                'eth_wallet_address' => $walletAddress,
+                'eth_wallet_private_key' => $privateKey,
+                'status' => 1,
+                'daily_share_cap' => 1000,
+                'max_income_quota' => 10000,
+                'used_income_quota' => 0,
+            ]);
+
+            // Find available parent in tree
+            $parentReferral = $this->findAvailableParent();
+
+            if (!$parentReferral) {
+                // No tree exists, create as root
+                $referral = Referral::create([
+                    'customer_id' => $customer->id,
+                    'parent_referral_id' => null,
+                    'direct_referral_id' => null,
+                    'left_child_id' => null,
+                    'right_child_id' => null,
+                    'level' => 1,
+                    'level_index' => 1,
+                    'left_points' => 0,
+                    'right_points' => 0,
+                    'status' => 1,
+                ]);
+
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Customer created successfully as root of tree',
+                    'customer' => [
+                        'id' => $customer->id,
+                        'first_name' => $customer->first_name,
+                        'last_name' => $customer->last_name,
+                        'email' => $customer->email,
+                        'referral_code' => $customer->referral_code,
+                        'wallet_address' => $walletAddress,
+                    ],
+                    'referral' => [
+                        'id' => $referral->id,
+                        'level' => $referral->level,
+                        'level_index' => $referral->level_index,
+                        'parent_referral_id' => null,
+                    ],
+                ]);
+            }
+
+            // Add customer to tree
+            $level = $parentReferral->level + 1;
+
+            // Determine if this will be left or right child
+            if (!$parentReferral->left_child_id) {
+                $levelIndex = $this->calculateLevelIndex($parentReferral->level_index, 1);
+                $position = 'left';
+
+                // Create referral as left child
+                $referral = Referral::create([
+                    'customer_id' => $customer->id,
+                    'parent_referral_id' => $parentReferral->id,
+                    'direct_referral_id' => $parentReferral->id,
+                    'left_child_id' => null,
+                    'right_child_id' => null,
+                    'level' => $level,
+                    'level_index' => $levelIndex,
+                    'left_points' => 0,
+                    'right_points' => 0,
+                    'status' => 1,
+                ]);
+
+                // Update parent's left child
+                $parentReferral->update(['left_child_id' => $referral->id]);
+            } else {
+                $levelIndex = $this->calculateLevelIndex($parentReferral->level_index, 2);
+                $position = 'right';
+
+                // Create referral as right child
+                $referral = Referral::create([
+                    'customer_id' => $customer->id,
+                    'parent_referral_id' => $parentReferral->id,
+                    'direct_referral_id' => $parentReferral->id,
+                    'left_child_id' => null,
+                    'right_child_id' => null,
+                    'level' => $level,
+                    'level_index' => $levelIndex,
+                    'left_points' => 0,
+                    'right_points' => 0,
+                    'status' => 1,
+                ]);
+
+                // Update parent's right child
+                $parentReferral->update(['right_child_id' => $referral->id]);
+            }
+
+            DB::commit();
+
+            $parentCustomer = Customer::find($parentReferral->customer_id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Customer created and added to tree successfully',
+                'customer' => [
+                    'id' => $customer->id,
+                    'first_name' => $customer->first_name,
+                    'last_name' => $customer->last_name,
+                    'email' => $customer->email,
+                    'referral_code' => $customer->referral_code,
+                    'wallet_address' => $walletAddress,
+                ],
+                'referral' => [
+                    'id' => $referral->id,
+                    'level' => $level,
+                    'level_index' => $levelIndex,
+                    'parent_referral_id' => $parentReferral->id,
+                    'position' => $position,
+                ],
+                'parent' => [
+                    'customer_id' => $parentCustomer->id,
+                    'email' => $parentCustomer->email,
+                    'referral_code' => $parentCustomer->referral_code,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create customer: ' . $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Create a product purchase for a customer
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function createProductPurchase(Request $request)
+    {
+        $request->validate([
+            'customer_id' => 'required|integer|exists:customers,id',
+            'product_id' => 'required|integer|exists:products,id',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            $customerId = $request->input('customer_id');
+            $productId = $request->input('product_id');
+
+            $customer = Customer::find($customerId);
+            $product = \App\Models\Product::find($productId);
+
+            if (!$product) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Product not found',
+                ], 404);
+            }
+
+            // Calculate income quota (typically 3x the product price)
+            $maxIncomeQuota = $product->price * 3;
+
+            // Create product purchase
+            $productPurchase = \App\Models\ProductPurchase::create([
+                'customer_id' => $customerId,
+                'product_id' => $productId,
+                'max_income_quota' => $maxIncomeQuota,
+                'remaining_income_quota' => $maxIncomeQuota,
+                'income_quota_status' => \App\Models\ProductPurchase::INCOME_QUOTA_STATUS['AVAILABLE'],
+                'status' => \App\Models\ProductPurchase::STATUS['AVAILABLE'],
+            ]);
+
+            // Update customer's purchased status
+            $customer->update([
+                'purchased_status' => Customer::PURCHASED_STATUS['ACTIVE'],
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Product purchase created successfully',
+                'purchase' => [
+                    'id' => $productPurchase->id,
+                    'customer_id' => $customerId,
+                    'customer_email' => $customer->email,
+                    'customer_referral_code' => $customer->referral_code,
+                    'product_id' => $productId,
+                    'product_name' => $product->name,
+                    'product_price' => $product->price,
+                    'product_points' => $product->points,
+                    'max_income_quota' => $maxIncomeQuota,
+                    'remaining_income_quota' => $maxIncomeQuota,
+                    'created_at' => $productPurchase->created_at->toDateTimeString(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create product purchase: ' . $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Create a project investment for a customer
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function createProjectInvestment(Request $request)
+    {
+        $request->validate([
+            'customer_id' => 'required|integer|exists:customers,id',
+            'project_id' => 'required|integer|exists:projects,id',
+            'amount' => 'required|numeric|min:0',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            $customerId = $request->input('customer_id');
+            $projectId = $request->input('project_id');
+            $amount = $request->input('amount');
+
+            $customer = Customer::find($customerId);
+            $project = \App\Models\Project::find($projectId);
+
+            if (!$project) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Project not found',
+                ], 404);
+            }
+
+            // Check minimum investment
+            if ($amount < $project->minimum_investment) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Investment amount must be at least {$project->minimum_investment}",
+                ], 422);
+            }
+
+            // Calculate points based on project points ratio
+            $points = $project->points ? ($amount * $project->points / 100) : 0;
+
+            // Create project investment
+            $projectInvestment = \App\Models\ProjectInvestment::create([
+                'customer_id' => $customerId,
+                'project_id' => $projectId,
+                'amount' => $amount,
+                'points' => $points,
+                'status' => \App\Models\ProjectInvestment::STATUS['COMPLETED'],
+            ]);
+
+            // Update project invested amount
+            $project->update([
+                'invested_amount' => $project->invested_amount + $amount,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Project investment created successfully',
+                'investment' => [
+                    'id' => $projectInvestment->id,
+                    'customer_id' => $customerId,
+                    'customer_email' => $customer->email,
+                    'customer_referral_code' => $customer->referral_code,
+                    'project_id' => $projectId,
+                    'project_name' => $project->name,
+                    'amount' => $amount,
+                    'points' => $points,
+                    'status' => $projectInvestment->status,
+                    'created_at' => $projectInvestment->created_at->toDateTimeString(),
+                ],
+                'project' => [
+                    'id' => $project->id,
+                    'name' => $project->name,
+                    'total_value' => $project->total_value,
+                    'invested_amount' => $project->invested_amount,
+                    'remaining' => $project->total_value - $project->invested_amount,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create project investment: ' . $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ], 500);
+        }
+    }
 }
 

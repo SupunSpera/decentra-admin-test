@@ -1,0 +1,511 @@
+{
+  "info": {
+    "name": "TE-NET Testing API Endpoints",
+    "description": "API endpoints for testing customer creation, product purchases, and project investments with automatic tree placement",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "customer_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "product_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "project_id",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Customer Management",
+      "item": [
+        {
+          "name": "Create Customer (Auto Tree Placement)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.customer) {",
+                  "        pm.collectionVariables.set('customer_id', jsonData.customer.id);",
+                  "        pm.environment.set('last_customer_id', jsonData.customer.id);",
+                  "        pm.environment.set('last_referral_code', jsonData.customer.referral_code);",
+                  "        console.log('Customer ID saved: ' + jsonData.customer.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"John\",\n  \"last_name\": \"Doe\",\n  \"email\": \"john.doe{{$timestamp}}@example.com\",\n  \"telephone\": \"1234567890\",\n  \"mobile\": \"0987654321\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/customer/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "customer", "create"]
+            },
+            "description": "Creates a new customer and automatically adds them to the binary referral tree"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Customer Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/testing/customer/details?customer_id={{customer_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "customer", "details"],
+              "query": [
+                {
+                  "key": "customer_id",
+                  "value": "{{customer_id}}"
+                }
+              ]
+            },
+            "description": "Get detailed customer information including tree relationships"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Root Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.customer) {",
+                  "        pm.collectionVariables.set('customer_id', jsonData.customer.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Root\",\n  \"last_name\": \"User\",\n  \"email\": \"root{{$timestamp}}@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/customer/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "customer", "create"]
+            },
+            "description": "Creates the first customer as the root of the tree"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Multiple Customers to Tree",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"count\": 10,\n  \"start_index\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/customers/add-to-tree",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "customers", "add-to-tree"]
+            },
+            "description": "Create multiple customers in a balanced binary tree (for bulk testing)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Product Purchases",
+      "item": [
+        {
+          "name": "Create Product Purchase",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.purchase) {",
+                  "        pm.environment.set('last_purchase_id', jsonData.purchase.id);",
+                  "        console.log('Purchase ID: ' + jsonData.purchase.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": {{customer_id}},\n  \"product_id\": {{product_id}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/product-purchase/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "product-purchase", "create"]
+            },
+            "description": "Creates a product purchase for a customer"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Project Investments",
+      "item": [
+        {
+          "name": "Create Project Investment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.investment) {",
+                  "        pm.environment.set('last_investment_id', jsonData.investment.id);",
+                  "        console.log('Investment ID: ' + jsonData.investment.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": {{customer_id}},\n  \"project_id\": {{project_id}},\n  \"amount\": 10000\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/project-investment/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "project-investment", "create"]
+            },
+            "description": "Creates a project investment for a customer"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Tree & Statistics",
+      "item": [
+        {
+          "name": "Get Tree Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/testing/tree/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "tree", "stats"]
+            },
+            "description": "Get comprehensive tree statistics including customer counts by level"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Points & Bonuses",
+      "item": [
+        {
+          "name": "Add Points to User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": {{customer_id}},\n  \"points\": 100,\n  \"side\": \"left\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/points/add-to-user",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "points", "add-to-user"]
+            },
+            "description": "Add points to a specific user on a specific side (left/right)"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Points to Multiple Users",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"users\": [\n    {\n      \"customer_id\": 1,\n      \"points\": 100,\n      \"side\": \"left\"\n    },\n    {\n      \"customer_id\": 2,\n      \"points\": 150,\n      \"side\": \"right\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/points/add-to-multiple-users",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "points", "add-to-multiple-users"]
+            },
+            "description": "Add points to multiple users in bulk"
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Supporting Bonuses",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 100\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/bonuses/generate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "bonuses", "generate"]
+            },
+            "description": "Generate supporting bonuses for customers"
+          },
+          "response": []
+        },
+        {
+          "name": "Check Supporting Bonuses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/testing/bonuses/check?customer_id={{customer_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "bonuses", "check"],
+              "query": [
+                {
+                  "key": "customer_id",
+                  "value": "{{customer_id}}"
+                }
+              ]
+            },
+            "description": "Check supporting bonuses for a specific customer"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Data Management",
+      "item": [
+        {
+          "name": "Clear Test Data (DANGEROUS)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirm\": \"YES_DELETE_ALL\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/clear-test-data",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "clear-test-data"]
+            },
+            "description": "⚠️ DANGEROUS: Clear all test data including customers, referrals, wallets, and bonuses"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. Complete Testing Workflow",
+      "item": [
+        {
+          "name": "Step 1 - Create Root Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success) {",
+                  "    pm.collectionVariables.set('customer_id', jsonData.customer.id);",
+                  "    pm.environment.set('root_customer_id', jsonData.customer.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Root\",\n  \"last_name\": \"Customer\",\n  \"email\": \"root{{$timestamp}}@test.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/customer/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "customer", "create"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Step 2 - Create Product Purchase",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": {{customer_id}},\n  \"product_id\": {{product_id}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/product-purchase/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "product-purchase", "create"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Step 3 - Create Project Investment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": {{customer_id}},\n  \"project_id\": {{project_id}},\n  \"amount\": 5000\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/project-investment/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "project-investment", "create"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Step 4 - Verify Customer Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/testing/customer/details?customer_id={{customer_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "customer", "details"],
+              "query": [
+                {
+                  "key": "customer_id",
+                  "value": "{{customer_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Step 5 - Check Tree Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/testing/tree/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "tree", "stats"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Complete workflow to test all endpoints in sequence"
+    }
+  ]
+}
+

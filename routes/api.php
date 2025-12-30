@@ -51,6 +51,18 @@ Route::prefix('testing')->group(function () {
     Route::post('/customers/add-to-tree', [TestingController::class, 'addCustomersToTree'])
         ->name('api.testing.customers.add-to-tree');
     
+    // Create single customer with automatic tree placement
+    Route::post('/customer/create', [TestingController::class, 'createCustomer'])
+        ->name('api.testing.customer.create');
+    
+    // Create product purchase
+    Route::post('/product-purchase/create', [TestingController::class, 'createProductPurchase'])
+        ->name('api.testing.product-purchase.create');
+    
+    // Create project investment
+    Route::post('/project-investment/create', [TestingController::class, 'createProjectInvestment'])
+        ->name('api.testing.project-investment.create');
+    
     // Add points to users
     Route::post('/points/add-to-user', [TestingController::class, 'addPointsToUser'])
         ->name('api.testing.points.add-to-user');
