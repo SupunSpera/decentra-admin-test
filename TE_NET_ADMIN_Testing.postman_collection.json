@@ -1,0 +1,351 @@
+{
+  "info": {
+    "name": "TE-NET-ADMIN Testing API",
+    "description": "Collection of testing endpoints for the binary tree referral system",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Customer Management",
+      "item": [
+        {
+          "name": "Add Customers to Tree",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"count\": 100,\n  \"start_index\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/customers/add-to-tree",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "customers", "add-to-tree"]
+            },
+            "description": "Creates multiple customers and adds them to the binary tree structure with hardcoded wallet addresses."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Customer Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/testing/customer/details?customer_id=1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "customer", "details"],
+              "query": [
+                {
+                  "key": "customer_id",
+                  "value": "1",
+                  "description": "Customer ID to get details for"
+                }
+              ]
+            },
+            "description": "Get detailed information about a specific customer including their tree relationships."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Points Management",
+      "item": [
+        {
+          "name": "Add Points to Single User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": 5,\n  \"points\": 100,\n  \"side\": \"left\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/points/add-to-user",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "points", "add-to-user"]
+            },
+            "description": "Adds points to a specific customer on a specified side and propagates up the tree."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Points to Multiple Users",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"users\": [\n    {\n      \"customer_id\": 5,\n      \"points\": 100,\n      \"side\": \"left\"\n    },\n    {\n      \"customer_id\": 10,\n      \"points\": 200,\n      \"side\": \"right\"\n    },\n    {\n      \"customer_id\": 15,\n      \"points\": 150,\n      \"side\": \"left\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/points/add-to-multiple-users",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "points", "add-to-multiple-users"]
+            },
+            "description": "Adds points to multiple customers in a single request."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Supporting Bonuses",
+      "item": [
+        {
+          "name": "Generate Supporting Bonuses (All Customers)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 100\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/bonuses/generate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "bonuses", "generate"]
+            },
+            "description": "Generates supporting bonuses for all customers with children."
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Supporting Bonuses (Specific Customers)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 150,\n  \"customer_ids\": [1, 2, 3, 4, 5]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/bonuses/generate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "bonuses", "generate"]
+            },
+            "description": "Generates supporting bonuses for specific customers."
+          },
+          "response": []
+        },
+        {
+          "name": "Check Supporting Bonuses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/testing/bonuses/check?customer_id=1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "bonuses", "check"],
+              "query": [
+                {
+                  "key": "customer_id",
+                  "value": "1",
+                  "description": "Customer ID to check bonuses for"
+                }
+              ]
+            },
+            "description": "Comprehensive check of supporting bonuses for a specific customer."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Tree Statistics",
+      "item": [
+        {
+          "name": "Get Tree Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/testing/tree/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "tree", "stats"]
+            },
+            "description": "Returns comprehensive statistics about the entire tree structure."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Data Management",
+      "item": [
+        {
+          "name": "Clear Test Data",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirm\": \"YES_DELETE_ALL\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/clear-test-data",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "clear-test-data"]
+            },
+            "description": "⚠️ DANGEROUS: Deletes all customers, referrals, wallets, and supporting bonuses."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Complete Test Workflow",
+      "item": [
+        {
+          "name": "Step 1: Create 50 Customers",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"count\": 50,\n  \"start_index\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/customers/add-to-tree",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "customers", "add-to-tree"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Step 2: Get Tree Stats (Initial)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/testing/tree/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "tree", "stats"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Step 3: Add Points to Multiple Users",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"users\": [\n    {\n      \"customer_id\": 10,\n      \"points\": 500,\n      \"side\": \"left\"\n    },\n    {\n      \"customer_id\": 11,\n      \"points\": 400,\n      \"side\": \"right\"\n    },\n    {\n      \"customer_id\": 12,\n      \"points\": 300,\n      \"side\": \"left\"\n    },\n    {\n      \"customer_id\": 13,\n      \"points\": 350,\n      \"side\": \"right\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/points/add-to-multiple-users",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "points", "add-to-multiple-users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Step 4: Generate Supporting Bonuses",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 100\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/testing/bonuses/generate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "bonuses", "generate"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Step 5: Check Root Customer Bonuses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/testing/bonuses/check?customer_id=1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "bonuses", "check"],
+              "query": [
+                {
+                  "key": "customer_id",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Step 6: Get Tree Stats (Final)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/testing/tree/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "testing", "tree", "stats"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

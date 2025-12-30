@@ -1,0 +1,34 @@
+@extends('layouts.app')
+@section('title', 'Item | DecentraX Admin')
+@section('ogtitle', 'Item | DecentraX Admin')
+@section('header')
+
+@section('content')
+
+    <div class="container-fluid">
+
+        <!-- Page Heading -->
+        <div class="mb-4 d-sm-flex align-items-center justify-content-between">
+            <h1 class="mb-0 text-gray-800 h3">Item Management</h1>
+
+        </div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ route('home') }}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{{ route('items.all') }}">Items</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Edit</li>
+            </ol>
+        </nav>
+        <!-- Content Row -->
+        <div class="row ">
+            <div class="col-xl-12 col-lg-12">
+            <livewire:item.item-update-form :itemId="$id" />
+            </div>
+
+        </div>
+
+
+    @endsection
+    @push('scripts')
+        <script></script>
+    @endpush
