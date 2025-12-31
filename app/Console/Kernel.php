@@ -22,6 +22,9 @@ class Kernel extends ConsoleKernel
         $schedule->command('run:updateGeneratedSupportingBonuses')->dailyAt('00:10');
         $schedule->command('run:completeProjects')->dailyAt('23:45');
         // $schedule->command('run:makeNfcCardCustomer')->dailyAt('00:00');
+
+        // Update referral counter caches hourly for 10k+ users performance
+        $schedule->command('referrals:update-metrics')->hourly();
     }
 
     /**

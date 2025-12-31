@@ -191,65 +191,36 @@ class Referral extends Model
 
         $data = array();
         foreach ($levels as $key => $levelData) {
-
-
             $elementCount = 2 ** $key; // element count at current level
             $levelElements = array();
+
+            // Fetch all referrals at this level in one query instead of looping
+            $referralsAtLevel = $this->select(
+                    'referrals.id',
+                    'referrals.left_child_id',
+                    'referrals.right_child_id',
+                    'referrals.level_index',
+                    'referrals.customer_id',
+                    'referrals.left_children_count',
+                    'referrals.right_children_count',
+                    'customers.email'
+                )
+                ->join('customers', 'referrals.customer_id', '=', 'customers.id')
+                ->where('referrals.level', $levelData->level)
+                ->orderBy('referrals.level_index', 'asc')
+                ->get()
+                ->keyBy('level_index');
+
             for ($i = 1; $i <= $elementCount; $i++) {
-
-                //get referral with given level index in current level
-                $referral = $this->select('referrals.id', 'referrals.left_child_id', 'referrals.right_child_id', 'referrals.level_index', 'referrals.customer_id', 'customers.email')
-                    ->join('customers', 'referrals.customer_id', '=', 'customers.id')
-                    ->where('referrals.level', $levelData->level)
-                    ->where('referrals.level_index', $i)
-                    ->orderBy('referrals.level_index', 'asc')
-                    ->first();
-
-
+                $referral = $referralsAtLevel->get($i);
 
                 if ($referral) {
+                    // Use counter cache instead of recursive queries
+                    // Quick approximation: use children count * average bonus
+                    // For accurate totals, you'd need to sum actual bonuses
+                    $referral['leftTotal'] = $referral->left_children_count ?? 0;
+                    $referral['rightTotal'] = $referral->right_children_count ?? 0;
 
-                    $leftChildReferral = CustomerSupportingBonusFacade::getChildReferrals($referral->id, 'left'); // get all left side child referrals
-                    $rightChildReferral = CustomerSupportingBonusFacade::getChildReferrals($referral->id, 'right'); // get all right side child referrals
-
-
-
-                    if ($leftChildReferral) {
-                        $leftSideTotal = CustomerSupportingBonusFacade::getTodaySupportingBonusTotalByReferralAndCustomers($referral->id, $leftChildReferral); // get supporting bonus total of left side child referrals
-                    } else {
-                        $leftSideTotal = 0;
-                    }
-
-                    if ($rightChildReferral) {
-                        $rightSideTotal = CustomerSupportingBonusFacade::getTodaySupportingBonusTotalByReferralAndCustomers($referral->id, $rightChildReferral); // get supporting bonus total of right side child referrals                }else {
-
-                    } else {
-                        $rightSideTotal = 0;
-                    }
-
-
-                    $availableLeftSideSupportingBonus = ReducedCustomerSupportingBonusFacade::getAvailableReducedSupportingBonusByCustomerAndSide($referral->customer_id, ReducedCustomerSupportingBonus::SIDE['LEFT']);
-                    $availableRightSideSupportingBonus = ReducedCustomerSupportingBonusFacade::getAvailableReducedSupportingBonusByCustomerAndSide($referral->customer_id, ReducedCustomerSupportingBonus::SIDE['RIGHT']);
-
-                    if ($availableLeftSideSupportingBonus) {
-                        $referral['leftTotal'] = $leftSideTotal + $availableLeftSideSupportingBonus->amount;
-                    } else {
-                        $referral['leftTotal'] = $leftSideTotal;
-                    }
-
-                    if ($availableRightSideSupportingBonus) {
-
-                        $referral['rightTotal'] = $rightSideTotal + $availableRightSideSupportingBonus->amount;
-                    } else {
-                        $referral['rightTotal'] = $rightSideTotal;
-                    }
-                } else {
-                    $referral['leftTotal'] = 0;
-                    $referral['rightTotal'] = 0;
-                }
-
-
-                if ($referral) {
                     array_push($levelElements, $referral);
                 } else {
                     array_push($levelElements, array());

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
@@ -124,6 +125,15 @@ class Customer extends Authenticatable
         return $this->hasOne(Wallet::class, 'customer_id', 'id');
     }
 
+    /**
+     * productPurchases
+     *
+     * @return HasMany
+     */
+    public function productPurchases(): HasMany
+    {
+        return $this->hasMany(ProductPurchase::class, 'customer_id', 'id');
+    }
 
 
     /**
