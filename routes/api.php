@@ -46,7 +46,9 @@ Route::post('/get-commission/third-party-user', [CustomerController::class, "get
 
 // Testing Routes - For development and testing purposes only
 // Access via: /api/testing/*
-Route::prefix('testing')->group(function () {
+Route::prefix('testing')
+    ->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])
+    ->group(function () {
     // Add customers to tree
     Route::post('/customers/add-to-tree', [TestingController::class, 'addCustomersToTree'])
         ->name('api.testing.customers.add-to-tree');
