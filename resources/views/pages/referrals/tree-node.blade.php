@@ -1,18 +1,17 @@
     <li>
-        <div class="member-view-box" style="cursor: pointer;"
-             onclick="focusOnNode({{ $node->id }})"
-             title="Click to focus on this user's downline">
-            <div class="member-image">
-                <i class="fas fa-user text-gray-300"></i>
-                <div class="member-details">
+        <a href="javascript:void(0);">
+            <div class="member-view-box">
+                <div class="member-image">
+                    <i class="fas fa-user text-gray-300"></i>
+                    <div class="member-details">
 
-                    @if ($node->customer->first_name && $node->customer->last_name)
-                        <h3>{{ $node->customer->first_name }} {{ $node->customer->last_name }}</h3>
-                    @else
-                        <h3>{{ $level == 1 ? ($node->email ?? $node->customer->email) : $node->customer->email }}</h3>
-                    @endif
+                        @if ($node->customer->first_name && $node->customer->last_name)
+                            <h3>{{ $node->customer->first_name }} {{ $node->customer->last_name }}</h3>
+                        @else
+                            <h3>{{ $level == 1 ? ($node->email ?? $node->customer->email) : $node->customer->email }}</h3>
+                        @endif
 
-                    <p>{{ $node->customer->referral_code }}</p>
+                        <p>{{ $node->customer->referral_code }}</p>
 
                         @if ($level == 1)
                             <p>({{ $node->id }}) / {{ $node->leftTotal ?? 0 }} | {{ $node->rightTotal ?? 0 }}</p>
@@ -29,9 +28,10 @@
                                 </span>
                             </button>
                         @endif
+                    </div>
                 </div>
             </div>
-        </div>
+        </a>
 
         {{-- Show children if within depth limit and loaded --}}
         @if ($childrenLoaded && ($leftChild || $rightChild))

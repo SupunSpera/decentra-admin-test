@@ -61,7 +61,7 @@ Route::prefix('customers')->middleware(['auth'])->group(function () {
 //Referral Management
 Route::prefix('referrals')->middleware(['auth'])->group(function () {
     Route::get('/tree', [ReferralController::class, "tree"])->name('referrals.tree');
-    Route::get('/tree-view/{rootId?}', [ReferralController::class, "treeView"])->name('referrals.tree-view');
+    Route::get('/tree-view', [ReferralController::class, "treeView"])->name('referrals.tree-view');
 });
 
 //Product Management
