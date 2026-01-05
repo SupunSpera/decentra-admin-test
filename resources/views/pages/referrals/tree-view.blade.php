@@ -263,9 +263,11 @@
             const containerWidth = $container.width();
             
             if (treeWidth > containerWidth) {
-                $container.scrollLeft((treeWidth - containerWidth) / 2);
+                $container.animate({
+                    scrollLeft: (treeWidth - containerWidth) / 2
+                }, 1500); // Scroll slowly over 1.5 seconds
             }
-        }, 100);
+        }, 500);
 
         // Zoom functionality
         let zoomLevel = 1.0;
