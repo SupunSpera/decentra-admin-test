@@ -78,34 +78,6 @@ class TreeContent extends Component
         \Log::info("✅ Children loaded for node {$this->node->id} (batch: 2 queries instead of 4)");
     }
 
-    public function loadMore()
-    {
-        // SAFETY: Prevent loading too deep (browser crash protection)
-        $maxAllowedDepth = 15; // ~32k nodes max
-
-        if ($this->maxDepth >= $maxAllowedDepth) {
-            \Log::warning("⚠️ Max depth limit reached ({$maxAllowedDepth} levels). Cannot load more to prevent browser crash.");
-            $this->dispatchBrowserEvent('alert', [
-                'type' => 'warning',
-                'message' => 'Maximum tree depth reached. Cannot load more levels to prevent performance issues.'
-            ]);
-            return;
-        }
-
-        \Log::info("🔵 Load More clicked for node {$this->node->id}, increasing maxDepth from {$this->maxDepth} to " . ($this->maxDepth + 5));
-
-        // Increase depth by 2 levels at a time (safer for large trees)
-        $this->maxDepth += 2;
-
-        // Load children if not already loaded
-        if (!$this->childrenLoaded) {
-            $this->loadChildren();
-        }
-
-        // Emit event to child components to load their children
-        $this->emit('loadMoreChildren');
-    }
-
     public function render()
     {
         return view('pages.referrals.tree-node');

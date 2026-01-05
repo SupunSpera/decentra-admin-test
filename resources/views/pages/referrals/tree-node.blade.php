@@ -35,7 +35,7 @@
                             <p>({{ $node->id }}) / {{ $node->left_points ?? 0 }} | {{ $node->right_points ?? 0 }}</p>
                         @endif
 
-                        {{-- Show Load More button if has children but not loaded --}}
+                        {{-- Show Load More button if has children but not loaded
                         @if (($node->left_child_id || $node->right_child_id) && $level >= $maxDepth)
                             <button wire:click="loadMore" wire:loading.attr="disabled" wire:target="loadMore" class="btn btn-sm btn-primary mt-2">
                                 <span wire:loading.remove wire:target="loadMore">Load More</span>
@@ -43,7 +43,7 @@
                                     <i class="fas fa-spinner fa-spin"></i> Loading...
                                 </span>
                             </button>
-                        @endif
+                        @endif --}}
                     </div>
                 </div>
             </div>
