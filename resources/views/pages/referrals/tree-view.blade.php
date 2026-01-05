@@ -107,7 +107,7 @@
     }
 
     .genealogy-tree li {
-        float: left;
+        /* float: left; Removed to fix centering issues */
         text-align: center;
         list-style-type: none;
         position: relative;
@@ -255,6 +255,17 @@
         $('.genealogy-tree ul').show();
 
         const $container = $('#tree-container');
+
+        // Center the tree view on load
+        setTimeout(function() {
+            const $tree = $('#tree-zoom');
+            const treeWidth = $tree.outerWidth();
+            const containerWidth = $container.width();
+            
+            if (treeWidth > containerWidth) {
+                $container.scrollLeft((treeWidth - containerWidth) / 2);
+            }
+        }, 100);
 
         // Zoom functionality
         let zoomLevel = 1.0;
