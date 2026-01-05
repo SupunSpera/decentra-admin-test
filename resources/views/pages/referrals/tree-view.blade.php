@@ -14,7 +14,18 @@
 <body>
 <div class="container-fluid bg-white">
     <div class="col-12 mt-2 d-flex justify-content-between align-items-center">
-        <div>(Referral ID) / Left Side Total | Right Side Total</div>
+        <div>
+            <div>(Referral ID) / Left Side Total | Right Side Total| {{ $rootId }}</div>
+            @if(isset($parentNodeId) && $parentNodeId)
+                <a href="/referrals/tree-view/{{ $parentNodeId }}" class="btn btn-sm btn-outline-primary mt-1">
+                    <i class="fas fa-level-up-alt"></i> Go to Parent
+                </a>
+            @elseif(isset($rootId) && $rootId)
+                <a href="/referrals/tree-view" class="btn btn-sm btn-outline-primary mt-1">
+                    <i class="fas fa-home"></i> Back to Top
+                </a>
+            @endif
+        </div>
 
         <!-- Zoom Controls -->
         <div class="zoom-controls">
@@ -42,6 +53,7 @@
                     @endforeach
                 </ul>
             </div>
+
         </div>
         <!-- End of tree structure -->
 
@@ -181,11 +193,14 @@
         border-radius: 4px;
         position: relative;
         width: 200px;
+        margin: 0 auto; /* Center the box */
+        display: inline-block; /* Make it inline-block for centering */
     }
 
     .member-image {
-        width: 60px;
+        width: 100%;
         position: relative;
+        text-align: center;
     }
 
     .member-image img {
@@ -218,6 +233,19 @@
 
     #tree-container {
         overflow: auto !important;
+    }
+
+    /* Jump to tree icon styling */
+    .member-details h3 a {
+        opacity: 0.6;
+        transition: all 0.2s ease;
+        text-decoration: none;
+    }
+
+    .member-details h3 a:hover {
+        opacity: 1;
+        transform: scale(1.2);
+        color: #007bff !important;
     }
 
 </style>

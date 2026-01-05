@@ -6,9 +6,25 @@
                     <div class="member-details">
 
                         @if ($node->customer->first_name && $node->customer->last_name)
-                            <h3>{{ $node->customer->first_name }} {{ $node->customer->last_name }}</h3>
+                            <h3>
+                                {{ $node->customer->first_name }} {{ $node->customer->last_name }}
+                                <a href="/referrals/tree-view/{{ $node->id }}" 
+                                   class="text-primary ml-2" 
+                                   title="View this user's tree"
+                                   style="font-size: 0.8em;">
+                                    <i class="fas fa-level-down-alt"></i>
+                                </a>
+                            </h3>
                         @else
-                            <h3>{{ $level == 1 ? ($node->email ?? $node->customer->email) : $node->customer->email }}</h3>
+                            <h3>
+                                {{ $level == 1 ? ($node->email ?? $node->customer->email) : $node->customer->email }}
+                                <a href="/referrals/tree-view/{{ $node->id }}" 
+                                   class="text-primary ml-2" 
+                                   title="View this user's tree"
+                                   style="font-size: 0.8em;">
+                                    <i class="fas fa-level-down-alt"></i>
+                                </a>
+                            </h3>
                         @endif
 
                         <p>{{ $node->customer->referral_code }}</p>

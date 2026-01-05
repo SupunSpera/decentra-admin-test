@@ -189,6 +189,8 @@ class Referral extends Model
     {
         $levels = $this->select('level')->distinct()->limit($limit)->get();
 
+
+
         $data = array();
         foreach ($levels as $key => $levelData) {
             $elementCount = 2 ** $key; // element count at current level

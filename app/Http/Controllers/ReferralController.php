@@ -32,11 +32,34 @@ class ReferralController extends Controller
      *
      * @return
      */
-    public function treeView(){
+    public function treeView($rootId = null){
         // Only load first 5 levels initially for better performance
         $initialLimit = 5;
-        $referral_levels = ReferralFacade::getAllReferralsByLevelsWithLimit($initialLimit);
-        return view('pages.referrals.tree-view', compact('referral_levels', 'initialLimit'));
+
+        // If rootId provided, start tree from that node
+        if ($rootId) {
+            $rootNode = ReferralFacade::get($rootId);
+            if ($rootNode) {
+                $rootNode->load('customer');
+                $rootNode->leftTotal = $rootNode->left_children_count ?? 0;
+                $rootNode->rightTotal = $rootNode->right_children_count ?? 0;
+                $referral_levels = [[$rootNode]]; // Wrap in array format
+                $parentNodeId = $rootNode->parent_referral_id; // For back navigation
+            } else {
+                // If invalid root, load default
+                $referral_levels = ReferralFacade::getAllReferralsByLevelsWithLimit($initialLimit);
+
+                $parentNodeId = null;
+            }
+        } else {
+            // Default: load from top
+            $referral_levels = ReferralFacade::getAllReferralsByLevelsWithLimit($initialLimit);
+            $parentNodeId = null;
+        }
+
+        // dd($referral_levels, $rootId, $parentNodeId, $initialLimit);
+
+        return view('pages.referrals.tree-view', compact('referral_levels', 'initialLimit', 'rootId', 'parentNodeId'));
     }
 }
 
