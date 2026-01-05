@@ -7,26 +7,107 @@ use Livewire\Component;
 
 class TreeContent extends Component
 {
-    public $node, $level, $maxLevel, $lastLevel;
+    public $node;
+    public $level;
+    public $maxDepth; // How many levels deep to show from this node
+    public $childrenLoaded = false;
+    public $leftChild = null;
+    public $rightChild = null;
 
-    protected $listeners = ['showChildren'];
-
-    public function mount()
+    public function mount($maxDepth = 5)
     {
-        $referral_levels = ReferralFacade::getAllReferralsByLevelsWithLimit(10);
+        $this->maxDepth = $maxDepth;
 
-        $this->maxLevel = session('maxLevel', 5); // Retrieve from session or default to 5
-        $this->lastLevel = ReferralFacade::getMaxLevel();
+        // Load children if within depth limit
+        if ($this->level < $this->maxDepth) {
+            $this->loadChildren();
+        }
+    }
+
+    public function loadChildren()
+    {
+        if ($this->childrenLoaded) {
+            return;
+        }
+
+        \Log::info("🔄 Loading children for node {$this->node->id} at level {$this->level}");
+
+        // OPTIMIZATION: Batch load both children in single query
+        $childIds = array_filter([
+            $this->node->left_child_id,
+            $this->node->right_child_id
+        ]);
+
+        if (empty($childIds)) {
+            $this->childrenLoaded = true;
+            return;
+        }
+
+        \Log::info("📥 Batch database query: Fetching children " . implode(', ', $childIds));
+
+        // Single query for all children with eager loading
+        $children = \App\Models\Referral::with('customer')
+            ->whereIn('id', $childIds)
+            ->get([
+                'id',
+                'customer_id',
+                'left_child_id',
+                'right_child_id',
+                'left_children_count',
+                'right_children_count',
+                'left_points',
+                'right_points',
+                'level'
+            ])
+            ->keyBy('id');
+
+        // Assign to left/right with counter cache totals
+        if ($this->node->left_child_id && isset($children[$this->node->left_child_id])) {
+            $this->leftChild = $children[$this->node->left_child_id];
+            $this->leftChild->leftTotal = $this->leftChild->left_children_count ?? 0;
+            $this->leftChild->rightTotal = $this->leftChild->right_children_count ?? 0;
+        }
+
+        if ($this->node->right_child_id && isset($children[$this->node->right_child_id])) {
+            $this->rightChild = $children[$this->node->right_child_id];
+            $this->rightChild->leftTotal = $this->rightChild->left_children_count ?? 0;
+            $this->rightChild->rightTotal = $this->rightChild->right_children_count ?? 0;
+        }
+
+        $this->childrenLoaded = true;
+        \Log::info("✅ Children loaded for node {$this->node->id} (batch: 2 queries instead of 4)");
+    }
+
+    public function loadMore()
+    {
+        // SAFETY: Prevent loading too deep (browser crash protection)
+        $maxAllowedDepth = 15; // ~32k nodes max
+
+        if ($this->maxDepth >= $maxAllowedDepth) {
+            \Log::warning("⚠️ Max depth limit reached ({$maxAllowedDepth} levels). Cannot load more to prevent browser crash.");
+            $this->dispatchBrowserEvent('alert', [
+                'type' => 'warning',
+                'message' => 'Maximum tree depth reached. Cannot load more levels to prevent performance issues.'
+            ]);
+            return;
+        }
+
+        \Log::info("🔵 Load More clicked for node {$this->node->id}, increasing maxDepth from {$this->maxDepth} to " . ($this->maxDepth + 5));
+
+        // Increase depth by 2 levels at a time (safer for large trees)
+        $this->maxDepth += 2;
+
+        // Load children if not already loaded
+        if (!$this->childrenLoaded) {
+            $this->loadChildren();
+        }
+
+        // Emit event to child components to load their children
+        $this->emit('loadMoreChildren');
     }
 
     public function render()
     {
         return view('pages.referrals.tree-node');
-    }
-
-    public function showChildren()
-    {
-        $this->maxLevel += 5;
-        session(['maxLevel' => $this->maxLevel]); // Store updated value in session
     }
 }

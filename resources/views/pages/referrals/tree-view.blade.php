@@ -13,8 +13,67 @@
 </head>
 <body>
 <div class="container-fluid bg-white">
+    <!-- Breadcrumb Navigation -->
+    @if(isset($focusedNode) && $focusedNode)
+        <div class="col-12 mt-2 p-3 bg-light border-bottom">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h5 class="mb-2">
+                        <i class="fas fa-crosshairs text-primary"></i>
+                        Focus Mode: {{ $focusedNode->customer->first_name ?? $focusedNode->customer->email }}
+                        <span class="badge badge-info ml-2">{{ $focusedNode->customer->referral_code }}</span>
+                    </h5>
+
+                    <!-- Breadcrumb Path -->
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb mb-0">
+                            <li class="breadcrumb-item">
+                                <a href="{{ route('referrals.tree-view') }}" class="text-primary">
+                                    <i class="fas fa-home"></i> Root
+                                </a>
+                            </li>
+                            @foreach($breadcrumb as $index => $crumb)
+                                @if($loop->last)
+                                    <li class="breadcrumb-item active" aria-current="page">
+                                        <strong>{{ $crumb['name'] }}</strong>
+                                    </li>
+                                @else
+                                    <li class="breadcrumb-item">
+                                        <a href="{{ route('referrals.tree-view', $crumb['id']) }}" class="text-primary">
+                                            {{ $crumb['name'] }}
+                                        </a>
+                                    </li>
+                                @endif
+                            @endforeach
+                        </ol>
+                    </nav>
+                </div>
+
+                <!-- Parent Navigation Button -->
+                @if($focusedNode->parent_referral_id)
+                    <div>
+                        <a href="{{ route('referrals.tree-view', $focusedNode->parent_referral_id) }}"
+                           class="btn btn-primary">
+                            <i class="fas fa-arrow-up"></i> Go to Parent
+                        </a>
+                    </div>
+                @else
+                    <div>
+                        <span class="badge badge-success">This is the Root User</span>
+                    </div>
+                @endif
+            </div>
+        </div>
+    @endif
+
     <div class="col-12 mt-2 d-flex justify-content-between align-items-center">
-        <div>(Referral ID) / Left Side Total | Right Side Total</div>
+        <div>
+            @if(!isset($focusedNode))
+                (Referral ID) / Left Side Total | Right Side Total
+            @else
+                <span class="text-muted">Viewing downline of: <strong>{{ $focusedNode->customer->referral_code }}</strong></span>
+            @endif
+        </div>
 
         <!-- Zoom Controls -->
         <div class="zoom-controls">
@@ -80,6 +139,9 @@
         min-height: 500px;
         padding-top: 10px;
         text-align: center;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
     }
 
     .genealogy-tree {
@@ -92,6 +154,19 @@
         padding-left: 0px;
         display: flex;
         justify-content: center;
+        margin: 0 auto; /* Center the tree */
+    }
+
+    .genealogy-tree > ul {
+        /* Root level - ensure single node is centered */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .genealogy-tree > ul > li {
+        /* If only one root node, center it */
+        margin: 0 auto;
     }
 
     .genealogy-tree li {
@@ -126,6 +201,12 @@
 
     .genealogy-tree li:only-child {
         padding-top: 0;
+    }
+
+    /* Fix for focused node - ensure it's centered as root */
+    .genealogy-tree > ul > li:only-child {
+        float: none;
+        display: inline-block;
     }
 
     .genealogy-tree li:first-child::before,
@@ -220,44 +301,55 @@
         overflow: auto !important;
     }
 
+    /* Focus Mode Styling */
+    .member-view-box {
+        transition: all 0.3s ease;
+    }
+
+    /* Highlight the focused root node */
+    @if(isset($focusedNode) && $focusedNode)
+    .genealogy-tree > ul > li:first-child .member-view-box {
+        border: 3px solid #667eea;
+        box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+    @endif
+
+    .member-view-box:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .member-view-box:hover h3,
+    .member-view-box:hover p {
+        color: white !important;
+    }
+
+    .member-view-box:active {
+        transform: scale(0.98);
+    }
+
+    /* Breadcrumb custom styling */
+    .breadcrumb {
+        background: transparent;
+        padding: 0.5rem 0;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "›";
+        font-size: 1.2em;
+        color: #6c757d;
+    }
+
 </style>
 <script>
     $(function() {
-        // Initially show first 4 levels
-        $('.genealogy-tree ul').hide();
-        $('.genealogy-tree > ul').show(); // Level 1
-        $('.genealogy-tree > ul > li > ul').show().addClass('active'); // Level 2
-        $('.genealogy-tree > ul > li > ul > li > ul').show().addClass('active'); // Level 3
-        $('.genealogy-tree > ul > li > ul > li > ul > li > ul').show().addClass('active'); // Level 4
+        // Livewire handles expand/collapse now - just show all loaded nodes
+        $('.genealogy-tree ul').show();
 
         const $container = $('#tree-container');
-
-        $('.genealogy-tree li').on('click', function(e) {
-            e.stopPropagation();
-
-            // Get current element position and container scroll
-            const $this = $(this);
-            const elementOffsetTop = $this.offset().top;
-            const containerScrollTop = $container.scrollTop();
-            const containerOffsetTop = $container.offset().top;
-
-            // Calculate relative position of clicked element from top of viewport
-            const relativePosition = elementOffsetTop - containerOffsetTop;
-
-            var children = $this.find('> ul');
-            if (children.is(":visible")) {
-                children.hide('fast').removeClass('active');
-            } else {
-                children.show('fast').addClass('active');
-            }
-
-            // Restore scroll position after animation
-            setTimeout(function() {
-                const newElementOffsetTop = $this.offset().top;
-                const scrollAdjustment = newElementOffsetTop - containerOffsetTop - relativePosition;
-                $container.scrollTop(containerScrollTop + scrollAdjustment);
-            }, 50);
-        });
 
         // Zoom functionality
         let zoomLevel = 1.0;
@@ -337,6 +429,23 @@
                 updateZoom();
             }
         });
+    });
+
+    // Focus Mode: Click node to focus on their downline
+    window.focusOnNode = function(nodeId) {
+        // Smooth transition effect
+        $('#tree-container').fadeOut(200, function() {
+            window.location.href = '/referrals/tree-view/' + nodeId;
+        });
+    };
+
+    // Debug: Log Livewire requests
+    document.addEventListener('livewire:load', function () {
+        console.log('✅ Livewire loaded - lazy loading ready!');
+    });
+
+    document.addEventListener('livewire:update', function () {
+        console.log('🔄 Livewire update - new data loaded from server!');
     });
 </script>
 @livewireScripts
