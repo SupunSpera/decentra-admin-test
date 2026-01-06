@@ -141,9 +141,41 @@ class ReferralPlacementService
 
     /**
      * Find optimal placement for new customer - SIMPLIFIED & OPTIMIZED
+     * 🔒 THREAD-SAFE VERSION with database locking
      *
      * @param int $directReferralId
      * @return array ['child' => id, 'side' => 'left'|'right']
+     */
+    public function findOptimalPlacementWithLock($directReferralId)
+    {
+        // 🔒 Lock the parent row for update - prevents race conditions
+        $parent = Referral::lockForUpdate()->find($directReferralId);
+
+        if (!$parent) {
+            throw new \Exception('Direct referral not found');
+        }
+
+        // Simple case: Left child empty
+        if (!$parent->left_child_id) {
+            return ['child' => $parent->id, 'side' => 'left', 'parent' => $parent];
+        }
+
+        // Simple case: Right child empty
+        if (!$parent->right_child_id) {
+            return ['child' => $parent->id, 'side' => 'right', 'parent' => $parent];
+        }
+
+        // Both occupied - use SIMPLIFIED balancing logic
+        return $this->findDeepestAvailableSlot($parent);
+    }
+
+    /**
+     * Find optimal placement for new customer - SIMPLIFIED & OPTIMIZED
+     * ⚠️ WARNING: NOT thread-safe - use findOptimalPlacementWithLock() instead
+     *
+     * @param int $directReferralId
+     * @return array ['child' => id, 'side' => 'left'|'right']
+     * @deprecated Use findOptimalPlacementWithLock() to prevent race conditions
      */
     public function findOptimalPlacement($directReferralId)
     {
@@ -208,7 +240,7 @@ class ReferralPlacementService
     }
 
     /**
-     * Auto placement with optimized logic
+     * Auto placement with optimized logic and RACE CONDITION PROTECTION
      *
      * @param Customer $customer
      * @param int $directReferralId
@@ -216,60 +248,66 @@ class ReferralPlacementService
      */
     public function autoPlacement($customer, $directReferralId)
     {
-        $placement = $this->findOptimalPlacement($directReferralId);
+        // 🔒 CRITICAL: Use database transaction with row locking
+        // Prevents race conditions when multiple users register simultaneously
+        return DB::transaction(function () use ($customer, $directReferralId) {
 
-        $parent = $placement['parent'] ?? Referral::find($placement['child']);
-        $side = $placement['side'];
+            // 🔒 Lock the row for update - prevents concurrent modifications
+            $placement = $this->findOptimalPlacementWithLock($directReferralId);
 
-        if ($side == 'left') {
-            $levelIndex = $this->calculateLevelIndex($parent->level_index, 1);
-        } else {
-            $levelIndex = $this->calculateLevelIndex($parent->level_index, 2);
-        }
+            $parent = $placement['parent'] ?? Referral::find($placement['child']);
+            $side = $placement['side'];
 
-        $referral = Referral::create([
-            'customer_id' => $customer->id,
-            'parent_referral_id' => $parent->id,
-            'direct_referral_id' => $directReferralId,
-            'level' => ($parent->level + 1),
-            'level_index' => $levelIndex,
-            'left_child_id' => null,
-            'right_child_id' => null,
-            'left_points' => 0,
-            'right_points' => 0,
-            'left_children_count' => 0,
-            'right_children_count' => 0,
-            'left_active_count' => 0,
-            'right_active_count' => 0,
-            'status' => 1,
-        ]);
+            if ($side == 'left') {
+                $levelIndex = $this->calculateLevelIndex($parent->level_index, 1);
+            } else {
+                $levelIndex = $this->calculateLevelIndex($parent->level_index, 2);
+            }
 
-        // Update parent
-        if ($side == 'left') {
-            $parent->update(['left_child_id' => $referral->id]);
-            $this->incrementChildCount($parent->id, 'left');
-        } else {
-            $parent->update(['right_child_id' => $referral->id]);
-            $this->incrementChildCount($parent->id, 'right');
-        }
+            $referral = Referral::create([
+                'customer_id' => $customer->id,
+                'parent_referral_id' => $parent->id,
+                'direct_referral_id' => $directReferralId,
+                'level' => ($parent->level + 1),
+                'level_index' => $levelIndex,
+                'left_child_id' => null,
+                'right_child_id' => null,
+                'left_points' => 0,
+                'right_points' => 0,
+                'left_children_count' => 0,
+                'right_children_count' => 0,
+                'left_active_count' => 0,
+                'right_active_count' => 0,
+                'status' => 1,
+            ]);
 
-        // Clear cache
-        $this->clearCache($parent->id);
+            // Update parent
+            if ($side == 'left') {
+                $parent->update(['left_child_id' => $referral->id]);
+                $this->incrementChildCount($parent->id, 'left');
+            } else {
+                $parent->update(['right_child_id' => $referral->id]);
+                $this->incrementChildCount($parent->id, 'right');
+            }
 
-        // 🔄 REAL-TIME COUNTER UPDATE (ENABLED)
-        // Updates parent counters immediately in batched queries (~0.05s overhead)
-        // Keeps tree counts 100% accurate in real-time
-        $this->updateParentCountersRealtime($referral->id);
+            // Clear cache
+            $this->clearCache($parent->id);
 
-        return [
-            'id' => $referral->id,
-            'level' => $referral->level,
-            'level_index' => $referral->level_index,
-            'position' => $side,
-            'placement_type' => 'auto_optimized',
-            'parent_referral_id' => $parent->id,
-            'direct_referral_id' => $directReferralId,
-        ];
+            // 🔄 REAL-TIME COUNTER UPDATE (ENABLED)
+            // Updates parent counters immediately in batched queries (~0.05s overhead)
+            // Keeps tree counts 100% accurate in real-time
+            $this->updateParentCountersRealtime($referral->id);
+
+            return [
+                'id' => $referral->id,
+                'level' => $referral->level,
+                'level_index' => $referral->level_index,
+                'position' => $side,
+                'placement_type' => 'auto_optimized',
+                'parent_referral_id' => $parent->id,
+                'direct_referral_id' => $directReferralId,
+            ];
+        });
     }
 
     /**
